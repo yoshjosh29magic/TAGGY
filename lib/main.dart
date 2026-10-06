@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
-
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
@@ -120,83 +120,120 @@ class Mascota {
 Future<String?> seleccionarYGuardarImagen(
   BuildContext context,
 ) async {
-  final source = await showModalBottomSheet<ImageSource>(
-    context: context,
-    backgroundColor: TaggyColors.surface,
-    showDragHandle: true,
-    builder: (sheetContext) {
-      return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 5, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Foto de la mascota',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 15),
-              ListTile(
-                leading: const Icon(
-                  Icons.photo_library_outlined,
-                  color: TaggyColors.lightBlue,
-                ),
-                title: const Text('Elegir de la galería'),
-                onTap: () {
-                  Navigator.pop(
-                    sheetContext,
-                    ImageSource.gallery,
-                  );
-                },
-              ),
-              ListTile(
-                leading: const Icon(
-                  Icons.camera_alt_outlined,
-                  color: TaggyColors.cyan,
-                ),
-                title: const Text('Tomar una foto'),
-                subtitle: const Text(
-                  'Disponible en dispositivos con cámara compatible',
-                ),
-                onTap: () {
-                  Navigator.pop(
-                    sheetContext,
-                    ImageSource.camera,
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      );
-    },
+  try {
+    XFile? imagen;
+
+    // ==========================================
+    // WINDOWS
+    // ==========================================
+ if (Platform.isWindows) {
+  final archivo = await FilePicker.pickFile(
+    type: FileType.image,
   );
 
-  if (source == null) {
+  if (archivo == null || archivo.path == null) {
     return null;
   }
 
-  try {
-    final picker = ImagePicker();
+  imagen = XFile(archivo.path!);
+}
 
-    final XFile? imagen = await picker.pickImage(
-      source: source,
-      imageQuality: 82,
-      maxWidth: 1600,
-    );
+    // ==========================================
+    // ANDROID / IOS
+    // ==========================================
+    else {
+      final source = await showModalBottomSheet<ImageSource>(
+        context: context,
+        backgroundColor: TaggyColors.surface,
+        showDragHandle: true,
+        builder: (sheetContext) {
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                20,
+                5,
+                20,
+                20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Foto de la mascota',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
 
-    if (imagen == null) {
-      return null;
+                  const SizedBox(height: 15),
+
+                  ListTile(
+                    leading: const Icon(
+                      Icons.photo_library_outlined,
+                      color: TaggyColors.cyan,
+                    ),
+                    title: const Text(
+                      'Elegir de la galería',
+                    ),
+                    onTap: () {
+                      Navigator.pop(
+                        sheetContext,
+                        ImageSource.gallery,
+                      );
+                    },
+                  ),
+
+                  ListTile(
+                    leading: const Icon(
+                      Icons.camera_alt_outlined,
+                      color: TaggyColors.blue,
+                    ),
+                    title: const Text(
+                      'Tomar una foto',
+                    ),
+                    onTap: () {
+                      Navigator.pop(
+                        sheetContext,
+                        ImageSource.camera,
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+
+      if (source == null) {
+        return null;
+      }
+
+      final picker = ImagePicker();
+
+      imagen = await picker.pickImage(
+        source: source,
+        imageQuality: 82,
+        maxWidth: 1600,
+      );
+
+      if (imagen == null) {
+        return null;
+      }
     }
+
+    // ==========================================
+    // GUARDAR FOTO DENTRO DE TAGGY
+    // ==========================================
 
     final directorio =
         await getApplicationDocumentsDirectory();
 
     final carpetaFotos = Directory(
-      '${directorio.path}${Platform.pathSeparator}taggy_fotos',
+      '${directorio.path}'
+      '${Platform.pathSeparator}'
+      'taggy_fotos',
     );
 
     if (!await carpetaFotos.exists()) {
@@ -205,26 +242,45 @@ Future<String?> seleccionarYGuardarImagen(
       );
     }
 
-    final rutaOriginal = imagen.path.toLowerCase();
-    final extension =
-        rutaOriginal.endsWith('.png') ? '.png' : '.jpg';
+    final rutaOriginal =
+        imagen.path.toLowerCase();
+
+    String extension = '.jpg';
+
+    if (rutaOriginal.endsWith('.png')) {
+      extension = '.png';
+    } else if (rutaOriginal.endsWith('.webp')) {
+      extension = '.webp';
+    } else if (rutaOriginal.endsWith('.jpeg')) {
+      extension = '.jpeg';
+    }
 
     final nombreArchivo =
-        'mascota_${DateTime.now().millisecondsSinceEpoch}$extension';
+        'mascota_'
+        '${DateTime.now().millisecondsSinceEpoch}'
+        '$extension';
 
     final nuevaRuta =
-        '${carpetaFotos.path}${Platform.pathSeparator}$nombreArchivo';
+        '${carpetaFotos.path}'
+        '${Platform.pathSeparator}'
+        '$nombreArchivo';
 
     final archivoGuardado =
-        await File(imagen.path).copy(nuevaRuta);
+        await File(imagen.path).copy(
+      nuevaRuta,
+    );
 
     return archivoGuardado.path;
   } catch (e) {
+    debugPrint(
+      'ERROR AL SELECCIONAR FOTO TAGGY: $e',
+    );
+
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'No se pudo abrir la cámara o galería en este dispositivo.',
+            'No se pudo seleccionar la imagen: $e',
           ),
         ),
       );
